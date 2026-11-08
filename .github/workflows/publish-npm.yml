@@ -1,0 +1,46 @@
+# Publishes js/ to npm as `flightpowers` when a GitHub release is published.
+#
+# Auth: npm trusted publishing (OIDC, no token) once the trusted publisher is
+# set on npmjs.com for this repo + this workflow file. The very first publish
+# cannot use it (npm requires the package to exist first), so for that one run
+# a short-lived token is read from the repo secret NPM_TOKEN; delete the secret
+# after the trusted publisher is saved. With the secret gone, npm uses OIDC.
+name: Publish to npm
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: js
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+      # Trusted publishing needs npm 11.5.1 or later.
+      - run: npm install -g npm@^11.5.1 && npm --version
+      - name: Tag must match package.json
+        if: github.event_name == 'release'
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          version="$(node -p "require('./package.json').version")"
+          if [ "$tag" != "$version" ]; then
+            echo "::error::release tag $GITHUB_REF_NAME does not match js/package.json version $version"
+            exit 1
+          fi
+      - run: npm ci
+      - run: npm test
+      - run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
