@@ -2,6 +2,10 @@
 
 Both packages (`flightpowers` on npm and on PyPI) share one version.
 
+## 0.1.2 (2026-11-08)
+
+- 0.1.2: release pipeline diagnostics; no code change. The npm publish step runs with `--loglevel silly` and, only when the job fails, prints the masked OIDC lines of npm's debug log.
+
 ## 0.1.1 (2026-11-08)
 
 - Docs: the READMEs link to the SDK guide, https://flightpowers.com/docs/sdks, and the package homepage (npm `homepage`, PyPI `Homepage`) points there.
