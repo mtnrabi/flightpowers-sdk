@@ -3,7 +3,7 @@
 Official client for the FlightPowers APIs: live Google Flights, Booking.com, Airbnb and Google Hotels data as JSON, through your own RapidAPI key.
 
 - Python 3.9+, standard library only (no dependencies). Type hints included.
-- Docs: https://flightpowers.com/docs
+- Docs: https://flightpowers.com/docs/sdks (SDK guide) and https://flightpowers.com/docs
 
 ## Install
 
@@ -36,7 +36,7 @@ if res.data:  # an empty search (search_status "empty") returns []
     print(res.data[0]["price"], res.data[0].get("price_range_in_relation_to_other_periods"))
 ```
 
-Round trips (`fp.flights.roundtrip`) come back with both legs paired and one total per row. `oneway_multi_airport` / `roundtrip_multi_airport` take 1 to 4 airports a side in one request.
+Round trips (`fp.flights.roundtrip`) come back with both legs paired and one total per row. `oneway_multi_airport` / `roundtrip_multi_airport` take 1 to 4 airports a side in one request. They also take a party with a child or an infant (passenger codes 2, 3, 4) and round trips over 32 nights: those are searched pair by pair on Google's own search call, as on the single-airport endpoints, with `meta.search_notes` set to `via_rpc`, no price range on those rows, and up to about a minute per call. Leave `use_fallback` out for them: on the round trip, `use_fallback=False` keeps an adults' stay over 32 nights on Google's page only (on many routes a 503 `upstream_no_render`).
 
 ### Booking.com
 
@@ -105,6 +105,7 @@ Each request body carries two extra fields, `_fp_source: "sdk-py"` and `_fp_tool
 
 ## Docs
 
+- SDK guide: https://flightpowers.com/docs/sdks
 - Flights: https://flightpowers.com/flights-api and https://flightpowers.com/flights-api/multi-airport
 - Booking.com: https://flightpowers.com/hotels-api and https://flightpowers.com/hotels-api/by-name
 - Airbnb: https://flightpowers.com/hotels-api/airbnb

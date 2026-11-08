@@ -4,7 +4,7 @@ Official client for the FlightPowers APIs: live Google Flights, Booking.com, Air
 
 - Zero runtime dependencies. Uses the global `fetch` (Node 18+, browsers, Deno, Bun).
 - ESM and CommonJS builds, TypeScript types included.
-- Docs: https://flightpowers.com/docs
+- Docs: https://flightpowers.com/docs/sdks (SDK guide) and https://flightpowers.com/docs
 
 ## Install
 
@@ -35,7 +35,7 @@ console.log(meta.searchStatus, data[0]?.price, data[0]?.price_range_in_relation_
 console.log(data[0]?.buy_link);
 ```
 
-Round trips (`fp.flights.roundtrip`) come back with both legs paired and one total per row. `onewayMultiAirport` / `roundtripMultiAirport` take 1 to 4 airports a side in one request.
+Round trips (`fp.flights.roundtrip`) come back with both legs paired and one total per row. `onewayMultiAirport` / `roundtripMultiAirport` take 1 to 4 airports a side in one request. They also take a party with a child or an infant (passenger codes 2, 3, 4) and round trips over 32 nights: those are searched pair by pair on Google's own search call, as on the single-airport endpoints, with `meta.searchNotes` set to `via_rpc`, no price range on those rows, and up to about a minute per call. Leave `use_fallback` out for them: on the round trip, `use_fallback: false` keeps an adults' stay over 32 nights on Google's page only (on many routes a 503 `upstream_no_render`).
 
 ### Booking.com
 
@@ -100,6 +100,7 @@ Each request body carries two extra fields, `_fp_source: "sdk-js"` and `_fp_tool
 
 ## Docs
 
+- SDK guide: https://flightpowers.com/docs/sdks
 - Flights: https://flightpowers.com/flights-api and https://flightpowers.com/flights-api/multi-airport
 - Booking.com: https://flightpowers.com/hotels-api and https://flightpowers.com/hotels-api/by-name
 - Airbnb: https://flightpowers.com/hotels-api/airbnb

@@ -29,7 +29,7 @@ classifiers = [
 dependencies = []
 
 [project.urls]
-Homepage = "https://flightpowers.com"
+Homepage = "https://flightpowers.com/docs/sdks"
 Documentation = "https://flightpowers.com/docs"
 Source = "https://github.com/mtnrabi/flightpowers-sdk"
 Issues = "https://github.com/mtnrabi/flightpowers-sdk/issues"
