@@ -1,0 +1,47 @@
+{
+  "name": "flightpowers",
+  "version": "0.1.0",
+  "description": "Official FlightPowers client: live Google Flights, Booking.com, Airbnb and Google Hotels data through your RapidAPI key.",
+  "keywords": ["flights", "google-flights", "hotels", "booking", "airbnb", "google-hotels", "travel", "rapidapi", "api", "sdk"],
+  "homepage": "https://flightpowers.com/docs",
+  "bugs": "https://github.com/mtnrabi/flightpowers-sdk/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mtnrabi/flightpowers-sdk.git",
+    "directory": "js"
+  },
+  "license": "MIT",
+  "author": "Matan Rabi",
+  "type": "module",
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/esm/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/esm/index.d.ts",
+        "default": "./dist/esm/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/index.d.ts",
+        "default": "./dist/cjs/index.js"
+      }
+    },
+    "./package.json": "./package.json"
+  },
+  "files": ["dist", "README.md", "LICENSE"],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
+    "build": "npm run clean && tsc -p tsconfig.esm.json && tsc -p tsconfig.cjs.json && node scripts/write-dist-pkg.cjs",
+    "typecheck": "tsc -p tsconfig.esm.json --noEmit",
+    "test": "npm run build && tsc -p tsconfig.typetest.json && node --test test/*.test.mjs test/*.test.cjs",
+    "prepublishOnly": "npm test"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0"
+  }
+}

@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "flightpowers"
+dynamic = ["version"]
+description = "Official FlightPowers client: live Google Flights, Booking.com, Airbnb and Google Hotels data through your RapidAPI key."
+readme = "README.md"
+requires-python = ">=3.9"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Matan Rabi" }]
+keywords = ["flights", "google-flights", "hotels", "booking", "airbnb", "google-hotels", "travel", "rapidapi", "api", "sdk"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Internet :: WWW/HTTP",
+  "Typing :: Typed",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://flightpowers.com"
+Documentation = "https://flightpowers.com/docs"
+Source = "https://github.com/mtnrabi/flightpowers-sdk"
+Issues = "https://github.com/mtnrabi/flightpowers-sdk/issues"
+
+[tool.setuptools.dynamic]
+version = { attr = "flightpowers._client.VERSION" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+flightpowers = ["py.typed"]

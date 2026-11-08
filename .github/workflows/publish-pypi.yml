@@ -1,0 +1,65 @@
+# Publishes py/ to PyPI as `flightpowers` when a GitHub release is published.
+#
+# Auth: PyPI trusted publishing (OIDC). No token is stored anywhere. The
+# publisher (a "pending publisher" before the first upload) must name:
+# owner mtnrabi, repository flightpowers-sdk, workflow publish-pypi.yml,
+# environment pypi.
+#
+# Release only: no workflow_dispatch (a hand run from a branch would publish
+# unreviewed code under a permanent version). The `pypi` environment only
+# accepts tags matching v*.
+name: Publish to PyPI
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    if: github.event_name == 'release' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: py
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Tag must match the package version
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          version="$(PYTHONPATH=src python -c 'import flightpowers; print(flightpowers.__version__)')"
+          if [ "$tag" != "$version" ]; then
+            echo "::error::release tag $GITHUB_REF_NAME does not match py version $version"
+            exit 1
+          fi
+      - run: python -m unittest discover -s tests
+        env:
+          PYTHONPATH: src
+      - run: python -m pip install --upgrade build twine
+      - run: python -m build
+      - run: python -m twine check --strict dist/*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: python-dist
+          path: py/dist/
+
+  publish:
+    needs: build
+    if: github.event_name == 'release' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/flightpowers/
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: python-dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
