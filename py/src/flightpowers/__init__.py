@@ -5,12 +5,13 @@
 >>> res = fp.flights.oneway(from_airport="JFK", to_airport="LHR", departure_date="2027-01-20")
 """
 
-from ._client import HOSTS, SOURCE_TAG, VERSION, FlightPowers, Response, ResponseMeta
+from ._client import BOOKING_FILTERS, HOSTS, SOURCE_TAG, VERSION, FlightPowers, Response, ResponseMeta
 from ._errors import FlightPowersError
 
 __version__ = VERSION
 
 __all__ = [
+    "BOOKING_FILTERS",
     "FlightPowers",
     "FlightPowersError",
     "Response",

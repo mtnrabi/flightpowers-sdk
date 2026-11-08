@@ -73,6 +73,7 @@ Every method resolves to `{ data, status, meta, headers }`:
 
 - `data`: the parsed JSON body.
 - `meta.searchStatus`: `ok`, `empty`, `partial` or `degraded`, from the `X-Search-Status` header (or the body's `search_status` on Airbnb and Google Hotels). `empty` means the search finished and there is nothing; `degraded` means the search did not finish, so an empty list says nothing about availability.
+- Booking.com sends no search status, so `meta.searchStatus` is `null` on every Booking method. A Booking search whose page gave no properties answers HTTP 404 (`No properties found...`), which throws `FlightPowersError`; a search where every room is over `budget_per_night` comes back as an empty list.
 - `meta.searchReason`, `meta.searchResults`, `meta.searchNotes`, `meta.searchFallback`: the other `X-Search-*` headers.
 - `meta.quota`: the RapidAPI `x-ratelimit-*` / `x-plan-*` headers, when present.
 
@@ -89,9 +90,9 @@ try {
 }
 ```
 
-Retries are off by default. `new FlightPowers({ rapidApiKey, maxRetries: 2 })` (or `{ maxRetries }` as the second argument of any method) repeats a request only when it answered HTTP 503 with `"retry": true` in its body, waiting `Retry-After` when sent, else 1 s, then 2 s. Nothing else is retried: a 429 would spend more quota, and a 4xx needs a fixed request.
+Retries are off by default. `new FlightPowers({ rapidApiKey, maxRetries: 2 })` (or `{ maxRetries }` as the second argument of any method) repeats a request only when it answered HTTP 503 with `"retry": true` in its body, waiting `Retry-After` when sent, else 1 s, then 2 s (each wait capped at 60 s, at most 10 retries). Nothing else is retried: a 429 would spend more quota, and a 4xx needs a fixed request.
 
-Options: `timeoutMs` (default 180000), `retryDelayMs` (default 1000), `fetch` (your own implementation), `baseUrls` (tests and proxies).
+Options: `timeoutMs` (total time per attempt, default 180000), `retryDelayMs` (default 1000), `fetch` (your own implementation), `baseUrls` (tests and proxies).
 
 ## Usage attribution
 

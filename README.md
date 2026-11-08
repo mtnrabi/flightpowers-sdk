@@ -43,7 +43,7 @@ cd py && PYTHONPATH=src python -m unittest discover -s tests   # Python 3.9+
 
 `js/scripts/live-smoke.mjs` and `py/scripts/live_smoke.py` make one real (metered) call per product with `RAPIDAPI_KEY` from the environment. They are not run in CI.
 
-Releases: a GitHub release tagged `vX.Y.Z` publishes both packages (`.github/workflows/publish-npm.yml`, `publish-pypi.yml`); the tag must equal the version in `js/package.json` and `py/src/flightpowers/_client.py`.
+Releases: a GitHub release tagged `vX.Y.Z` publishes both packages (`.github/workflows/publish-npm.yml`, `publish-pypi.yml`); the tag must equal the version in `js/package.json` and `py/src/flightpowers/_client.py`. Nothing else publishes: there is no manual run, and the `npm` and `pypi` environments only accept `v*` tags. Before the first release (`v0.1.0`), add the repo secret `NPM_TOKEN` (or publish 0.1.0 to npm by hand), since npm trusted publishing can only be set up once the package exists; without it the npm job stops at its preflight while PyPI still publishes.
 
 ## License
 

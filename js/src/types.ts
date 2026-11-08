@@ -177,12 +177,16 @@ export interface RoundtripFlight {
 
 /* ----------------------------------------------------------------- booking */
 
-export type BookingFilter =
-  | "free_cancellation" | "breakfast_included" | "breakfast_and_lunch" | "breakfast_and_dinner"
-  | "all_meals_included" | "all_inclusive" | "free_wifi" | "swimming_pool" | "gym" | "parking"
-  | "front_desk_24h" | "review_score_7" | "review_score_8" | "review_score_9" | "private_bathroom"
-  | "air_conditioning" | "stars_3" | "stars_4" | "stars_5" | "pets_allowed" | "adults_only"
-  | "sauna" | "very_good_breakfast" | "accepts_online_pay";
+/** The 24 Booking.com search filters `/search` accepts (docs: llms-full.txt, `/v1/hotels/search`). */
+export const BOOKING_FILTERS = [
+  "free_cancellation", "breakfast_included", "breakfast_and_lunch", "breakfast_and_dinner",
+  "all_meals_included", "all_inclusive", "free_wifi", "swimming_pool", "gym", "parking",
+  "front_desk_24h", "review_score_7", "review_score_8", "review_score_9", "private_bathroom",
+  "air_conditioning", "stars_3", "stars_4", "stars_5", "pets_allowed", "adults_only",
+  "sauna", "very_good_breakfast", "accepts_online_payment",
+] as const;
+
+export type BookingFilter = (typeof BOOKING_FILTERS)[number];
 
 export type HotelSort = "price_asc" | "price_desc" | "rating_desc";
 

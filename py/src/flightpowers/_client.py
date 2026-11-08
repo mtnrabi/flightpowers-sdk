@@ -12,6 +12,7 @@ from typing import Any, Callable, Dict, Generic, List, Mapping, Optional, Sequen
 from ._errors import FlightPowersError
 
 __all__ = [
+    "BOOKING_FILTERS",
     "VERSION",
     "SOURCE_TAG",
     "HOSTS",
@@ -32,6 +33,21 @@ HOSTS: Mapping[str, str] = {
     "airbnb": "airbnb-live-api.p.rapidapi.com",
     "google_hotels": "google-hotels-live-api.p.rapidapi.com",
 }
+
+#: The 24 Booking.com search filters ``booking.search(filters=...)`` accepts
+#: (docs: https://flightpowers.com/llms-full.txt, ``/v1/hotels/search``).
+BOOKING_FILTERS = (
+    "free_cancellation", "breakfast_included", "breakfast_and_lunch", "breakfast_and_dinner",
+    "all_meals_included", "all_inclusive", "free_wifi", "swimming_pool", "gym", "parking",
+    "front_desk_24h", "review_score_7", "review_score_8", "review_score_9", "private_bathroom",
+    "air_conditioning", "stars_3", "stars_4", "stars_5", "pets_allowed", "adults_only",
+    "sauna", "very_good_breakfast", "accepts_online_payment",
+)
+
+#: Most retries one call may make, whatever ``max_retries`` says.
+MAX_RETRIES_CAP = 10
+#: Longest wait before a retry, computed or from ``Retry-After``, in seconds.
+MAX_RETRY_WAIT = 60.0
 
 T = TypeVar("T")
 AirportList = Union[str, Sequence[str]]
@@ -122,6 +138,14 @@ def _error_message(tool: str, status: int, body: Any) -> str:
     return "FlightPowers {} answered HTTP {}{}".format(tool, status, ": " + detail if detail else "")
 
 
+def _clamp_retries(value: Any) -> int:
+    if isinstance(value, float) and value != value:  # NaN
+        return 0
+    if isinstance(value, float) and value in (float("inf"), float("-inf")):
+        return MAX_RETRIES_CAP if value > 0 else 0
+    return min(MAX_RETRIES_CAP, max(0, int(value)))
+
+
 def _retry_after_seconds(headers: Mapping[str, str]) -> Optional[float]:
     raw = headers.get("retry-after")
     if raw is None:
@@ -130,7 +154,7 @@ def _retry_after_seconds(headers: Mapping[str, str]) -> Optional[float]:
         seconds = float(raw)
     except ValueError:
         return None
-    return min(max(seconds, 0.0), 60.0)
+    return min(max(seconds, 0.0), MAX_RETRY_WAIT)
 
 
 def _compact(params: Mapping[str, Any]) -> Dict[str, Any]:
@@ -160,17 +184,19 @@ class FlightPowers:
         """
         :param rapidapi_key: your RapidAPI key (https://rapidapi.com/developer/apps).
         :param max_retries: how many times to repeat a request that answered HTTP 503
-            with ``"retry": true`` in its body. Default 0 (never). Nothing else is retried.
-        :param retry_delay: base wait in seconds before a retry, doubled each time;
-            a ``Retry-After`` header wins.
-        :param timeout: per-request timeout in seconds (default 180, RapidAPI's own limit).
+            with ``"retry": true`` in its body. Default 0 (never), capped at 10. Nothing else is retried.
+        :param retry_delay: base wait in seconds before a retry, doubled each time and capped
+            at 60 s; a ``Retry-After`` header wins (also capped at 60 s).
+        :param timeout: socket timeout in seconds (default 180, RapidAPI's own limit). It bounds
+            the connect and each read, not the whole request: a body that keeps trickling in
+            can take longer in total.
         :param base_urls: override a listing's base URL (tests, proxies), keyed like ``HOSTS``.
         :param transport: replace the HTTP layer (tests).
         """
         if not isinstance(rapidapi_key, str) or not rapidapi_key.strip():
             raise ValueError("FlightPowers: rapidapi_key is required")
         self._key = rapidapi_key.strip()
-        self._max_retries = max(0, int(max_retries))
+        self._max_retries = _clamp_retries(max_retries)
         self._retry_delay = max(0.0, float(retry_delay))
         self._timeout = float(timeout)
         self._base_urls = {name: "https://" + host for name, host in HOSTS.items()}
@@ -210,7 +236,7 @@ class FlightPowers:
             "x-rapidapi-key": self._key,
             "x-rapidapi-host": HOSTS[product],
         }
-        retries = self._max_retries if max_retries is None else max(0, int(max_retries))
+        retries = self._max_retries if max_retries is None else _clamp_retries(max_retries)
         wait_budget = self._timeout if timeout is None else float(timeout)
 
         attempt = 0
@@ -242,7 +268,9 @@ class FlightPowers:
             )
             if status == 503 and error.retry is True and attempt < retries:
                 delay = _retry_after_seconds(lower)
-                self._sleep(delay if delay is not None else self._retry_delay * (2**attempt))
+                if delay is None:
+                    delay = min(MAX_RETRY_WAIT, self._retry_delay * (2**attempt))
+                self._sleep(delay)
                 attempt += 1
                 continue
             raise error
@@ -379,7 +407,10 @@ class Booking(_Namespace):
         sort: Optional[str] = None,
         **extra: Any,
     ) -> Response[Dict[str, Any]]:
-        """Hotels at a destination (the field is ``destination``, not ``location``)."""
+        """Hotels at a destination (the field is ``destination``, not ``location``).
+
+        ``filters`` takes names from ``BOOKING_FILTERS``.
+        """
         params = dict(locals())
         return self._post("/search", "booking.search", _args(params), extra)
 

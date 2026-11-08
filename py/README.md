@@ -31,7 +31,9 @@ import os
 from flightpowers import FlightPowers
 fp = FlightPowers(os.environ["RAPIDAPI_KEY"])
 res = fp.flights.oneway(from_airport="JFK", to_airport="LHR", departure_date="2027-01-20")
-print(res.meta.search_status, res.data[0]["price"], res.data[0].get("price_range_in_relation_to_other_periods"))
+print(res.meta.search_status)
+if res.data:  # an empty search (search_status "empty") returns []
+    print(res.data[0]["price"], res.data[0].get("price_range_in_relation_to_other_periods"))
 ```
 
 Round trips (`fp.flights.roundtrip`) come back with both legs paired and one total per row. `oneway_multi_airport` / `roundtrip_multi_airport` take 1 to 4 airports a side in one request.
@@ -77,6 +79,7 @@ Every method returns a `Response` with `data`, `status`, `meta` and `headers`:
 
 - `data`: the parsed JSON body.
 - `meta.search_status`: `ok`, `empty`, `partial` or `degraded`, from the `X-Search-Status` header (or the body's `search_status` on Airbnb and Google Hotels). `empty` means the search finished and there is nothing; `degraded` means the search did not finish, so an empty list says nothing about availability.
+- Booking.com sends no search status, so `meta.search_status` is `None` on every Booking method. A Booking search whose page gave no properties answers HTTP 404 (`No properties found...`), which raises `FlightPowersError`; a search where every room is over `budget_per_night` comes back as an empty list.
 - `meta.search_reason`, `meta.search_results`, `meta.search_notes`, `meta.search_fallback`: the other `X-Search-*` headers.
 - `meta.quota`: the RapidAPI `x-ratelimit-*` / `x-plan-*` headers, when present.
 
@@ -92,9 +95,9 @@ except FlightPowersError as err:
     print(err.status, err.search_status, err.search_reason, err.retry)
 ```
 
-Retries are off by default. `FlightPowers(key, max_retries=2)` repeats a request only when it answered HTTP 503 with `"retry": true` in its body, waiting `Retry-After` when sent, else 1 s, then 2 s. Nothing else is retried: a 429 would spend more quota, and a 4xx needs a fixed request.
+Retries are off by default. `FlightPowers(key, max_retries=2)` repeats a request only when it answered HTTP 503 with `"retry": true` in its body, waiting `Retry-After` when sent, else 1 s, then 2 s (each wait capped at 60 s, at most 10 retries). Nothing else is retried: a 429 would spend more quota, and a 4xx needs a fixed request.
 
-Options: `timeout` (seconds, default 180), `retry_delay` (seconds, default 1), `base_urls` (tests and proxies), `transport` (replace the HTTP layer).
+Options: `timeout` (socket timeout in seconds, default 180: it bounds the connect and each read, not the whole request), `retry_delay` (seconds, default 1), `base_urls` (tests and proxies), `transport` (replace the HTTP layer).
 
 ## Usage attribution
 

@@ -2,7 +2,7 @@ import json
 import re
 import unittest
 
-from flightpowers import HOSTS, SOURCE_TAG, VERSION, FlightPowers, FlightPowersError
+from flightpowers import BOOKING_FILTERS, HOSTS, SOURCE_TAG, VERSION, FlightPowers, FlightPowersError
 
 
 class FakeTransport:
@@ -189,6 +189,29 @@ class ErrorTests(unittest.TestCase):
             client(transport, max_retries=2).flights.oneway(**ENDPOINTS[0][2])
         self.assertEqual(len(transport.calls), 3)
 
+    def test_max_retries_is_capped_at_ten(self):
+        for value in (float("inf"), 10**9, 10):
+            with self.subTest(value=value):
+                transport = FakeTransport(RETRY_503)
+                with self.assertRaises(FlightPowersError):
+                    client(transport, max_retries=value, retry_delay=0).flights.oneway(**ENDPOINTS[0][2])
+                self.assertEqual(len(transport.calls), 11)
+        transport = FakeTransport(RETRY_503)
+        with self.assertRaises(FlightPowersError):
+            client(transport, retry_delay=0).request("flights", "/x", {}, "t", max_retries=float("inf"))
+        self.assertEqual(len(transport.calls), 11)
+        transport = FakeTransport(RETRY_503)
+        with self.assertRaises(FlightPowersError):
+            client(transport, max_retries=float("nan")).flights.oneway(**ENDPOINTS[0][2])
+        self.assertEqual(len(transport.calls), 1)
+
+    def test_computed_wait_is_capped_at_sixty_seconds(self):
+        transport = FakeTransport(RETRY_503)
+        fp = client(transport, max_retries=4, retry_delay=20)
+        with self.assertRaises(FlightPowersError):
+            fp.flights.oneway(**ENDPOINTS[0][2])
+        self.assertEqual(fp.sleeps, [20, 40, 60.0, 60.0])
+
     def test_other_failures_are_never_retried(self):
         for answer in (
             {"status": 503, "body": {"retry": False}},
@@ -278,6 +301,24 @@ class UrllibTransportTests(unittest.TestCase):
         finally:
             server.shutdown()
             server.server_close()
+
+
+# Copied from https://flightpowers.com/llms-full.txt, /v1/hotels/search "filters" (2026-11-08),
+# which matches hotel_agent nodejs_mvp/main.js FILTER_MAP.
+DOCS_BOOKING_FILTERS = (
+    "free_cancellation | breakfast_included | breakfast_and_lunch | breakfast_and_dinner | all_meals_included | "
+    "all_inclusive | free_wifi | swimming_pool | gym | parking | front_desk_24h | review_score_7 | review_score_8 | "
+    "review_score_9 | private_bathroom | air_conditioning | stars_3 | stars_4 | stars_5 | pets_allowed | adults_only | "
+    "sauna | very_good_breakfast | accepts_online_payment"
+)
+
+
+class BookingFiltersTest(unittest.TestCase):
+    def test_exactly_the_24_documented_names(self):
+        docs = DOCS_BOOKING_FILTERS.split(" | ")
+        self.assertEqual(len(docs), 24)
+        self.assertEqual(list(BOOKING_FILTERS), docs)
+        self.assertNotIn("accepts_online_pay", BOOKING_FILTERS)
 
 
 if __name__ == "__main__":

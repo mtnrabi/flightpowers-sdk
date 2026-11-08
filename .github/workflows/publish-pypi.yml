@@ -4,18 +4,22 @@
 # publisher (a "pending publisher" before the first upload) must name:
 # owner mtnrabi, repository flightpowers-sdk, workflow publish-pypi.yml,
 # environment pypi.
+#
+# Release only: no workflow_dispatch (a hand run from a branch would publish
+# unreviewed code under a permanent version). The `pypi` environment only
+# accepts tags matching v*.
 name: Publish to PyPI
 
 on:
   release:
     types: [published]
-  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
   build:
+    if: github.event_name == 'release' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -26,7 +30,6 @@ jobs:
         with:
           python-version: "3.12"
       - name: Tag must match the package version
-        if: github.event_name == 'release'
         run: |
           tag="${GITHUB_REF_NAME#v}"
           version="$(PYTHONPATH=src python -c 'import flightpowers; print(flightpowers.__version__)')"
@@ -47,6 +50,7 @@ jobs:
 
   publish:
     needs: build
+    if: github.event_name == 'release' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     environment:
       name: pypi

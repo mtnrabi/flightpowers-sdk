@@ -47,12 +47,12 @@ export interface FlightPowersOptions {
   /**
    * How many times to repeat a request that answered HTTP 503 with
    * `"retry": true` in its body. Default 0 (never). Nothing else is retried:
-   * a 429 spends quota, a 4xx needs a fixed request.
+   * a 429 spends quota, a 4xx needs a fixed request. Capped at 10.
    */
   maxRetries?: number;
-  /** Base wait before a retry, doubled each time; a `Retry-After` header wins. Default 1000 ms. */
+  /** Base wait before a retry, doubled each time and capped at 60 s; a `Retry-After` header wins (also capped at 60 s). Default 1000 ms. */
   retryDelayMs?: number;
-  /** Per-request timeout. Default 180000 ms (RapidAPI's own proxy limit). */
+  /** Total time one attempt may take (the request and reading its body). Default 180000 ms (RapidAPI's own proxy limit). */
   timeoutMs?: number;
   /** A `fetch` implementation. Default: the global `fetch` (Node 18+, browsers, Deno, Bun). */
   fetch?: typeof fetch;
@@ -67,6 +67,25 @@ export interface RequestOptions {
   maxRetries?: number;
   /** Override the client's `timeoutMs` for this call. */
   timeoutMs?: number;
+}
+
+/** Most retries one call may make, whatever `maxRetries` says. */
+const MAX_RETRIES_CAP = 10;
+/** Longest wait before a retry, computed or from `Retry-After`. */
+const MAX_RETRY_WAIT_MS = 60_000;
+
+function clampRetries(value: number): number {
+  const n = Math.floor(Number(value));
+  if (Number.isNaN(n)) return 0;
+  return Math.min(MAX_RETRIES_CAP, Math.max(0, n));
+}
+
+function clampTimeout(value: number): number {
+  const n = Number(value);
+  if (Number.isNaN(n)) return 180_000;
+  // setTimeout treats anything past 2^31-1 ms (and NaN) as 1 ms; keep it sane.
+  if (!Number.isFinite(n)) return 2_147_483_647;
+  return Math.min(2_147_483_647, Math.max(1, n));
 }
 
 const QUOTA_HEADER = /^(x-ratelimit-|x-plan-)/i;
@@ -113,7 +132,7 @@ function retryAfterMs(headers: Headers): number | null {
   const raw = headers.get("retry-after");
   if (raw === null) return null;
   const seconds = Number(raw);
-  if (Number.isFinite(seconds) && seconds >= 0) return Math.min(seconds, 60) * 1000;
+  if (Number.isFinite(seconds) && seconds >= 0) return Math.min(seconds * 1000, MAX_RETRY_WAIT_MS);
   return null;
 }
 
@@ -163,9 +182,9 @@ export class FlightPowers {
     }
     this.#key = options.rapidApiKey.trim();
     this.#fetch = fetchImpl;
-    this.#maxRetries = Math.max(0, Math.floor(options.maxRetries ?? 0));
+    this.#maxRetries = clampRetries(options.maxRetries ?? 0);
     this.#retryDelayMs = Math.max(0, options.retryDelayMs ?? 1000);
-    this.#timeoutMs = Math.max(1, options.timeoutMs ?? 180_000);
+    this.#timeoutMs = clampTimeout(options.timeoutMs ?? 180_000);
     this.#baseUrls = {
       flights: options.baseUrls?.flights ?? `https://${HOSTS.flights}`,
       booking: options.baseUrls?.booking ?? `https://${HOSTS.booking}`,
@@ -200,8 +219,8 @@ export class FlightPowers {
     if (!isObject(params)) throw new TypeError(`FlightPowers ${tool}: params must be an object`);
     const url = `${this.#baseUrls[product].replace(/\/+$/, "")}${path}`;
     const body = JSON.stringify({ ...params, _fp_source: SOURCE_TAG, _fp_tool: tool });
-    const maxRetries = Math.max(0, Math.floor(options.maxRetries ?? this.#maxRetries));
-    const timeoutMs = options.timeoutMs ?? this.#timeoutMs;
+    const maxRetries = clampRetries(options.maxRetries ?? this.#maxRetries);
+    const timeoutMs = options.timeoutMs === undefined ? this.#timeoutMs : clampTimeout(options.timeoutMs);
 
     for (let attempt = 0; ; attempt++) {
       const controller = new AbortController();
@@ -258,7 +277,7 @@ export class FlightPowers {
         headers: response.headers,
       });
       if (response.status === 503 && error.retry === true && attempt < maxRetries) {
-        const wait = retryAfterMs(response.headers) ?? this.#retryDelayMs * 2 ** attempt;
+        const wait = Math.min(MAX_RETRY_WAIT_MS, retryAfterMs(response.headers) ?? this.#retryDelayMs * 2 ** attempt);
         await sleep(wait, options.signal);
         continue;
       }

@@ -5,12 +5,15 @@
 # cannot use it (npm requires the package to exist first), so for that one run
 # a short-lived token is read from the repo secret NPM_TOKEN; delete the secret
 # after the trusted publisher is saved. With the secret gone, npm uses OIDC.
+#
+# Release only: no workflow_dispatch (a hand run from a branch would publish
+# unreviewed code under a permanent version). The `npm` environment only
+# accepts tags matching v*.
 name: Publish to npm
 
 on:
   release:
     types: [published]
-  workflow_dispatch:
 
 permissions:
   contents: read
@@ -18,7 +21,11 @@ permissions:
 
 jobs:
   publish:
+    if: github.event_name == 'release' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
+    environment:
+      name: npm
+      url: https://www.npmjs.com/package/flightpowers
     defaults:
       run:
         working-directory: js
@@ -31,12 +38,22 @@ jobs:
       # Trusted publishing needs npm 11.5.1 or later.
       - run: npm install -g npm@^11.5.1 && npm --version
       - name: Tag must match package.json
-        if: github.event_name == 'release'
         run: |
           tag="${GITHUB_REF_NAME#v}"
           version="$(node -p "require('./package.json').version")"
           if [ "$tag" != "$version" ]; then
             echo "::error::release tag $GITHUB_REF_NAME does not match js/package.json version $version"
+            exit 1
+          fi
+      # The first publish needs NPM_TOKEN (the package does not exist yet, so
+      # trusted publishing cannot be set up). Fail here with a plain message
+      # instead of inside npm publish.
+      - name: npm auth preflight
+        env:
+          HAS_TOKEN: ${{ secrets.NPM_TOKEN != '' }}
+        run: |
+          if [ "$HAS_TOKEN" != "true" ] && ! npm view flightpowers name >/dev/null 2>&1; then
+            echo "::error::flightpowers is not on npm yet and NPM_TOKEN is not set: add the secret (or publish the first version by hand) before the first release"
             exit 1
           fi
       - run: npm ci

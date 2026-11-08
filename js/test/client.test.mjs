@@ -1,7 +1,7 @@
-import { test } from "node:test";
+import { test, mock } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { FlightPowers, FlightPowersError, HOSTS, SOURCE_TAG, VERSION } from "../dist/esm/index.js";
+import { BOOKING_FILTERS, FlightPowers, FlightPowersError, HOSTS, SOURCE_TAG, VERSION } from "../dist/esm/index.js";
 
 /** A fetch stand-in that records calls and answers from a queue. */
 function mockFetch(...answers) {
@@ -233,4 +233,74 @@ test("baseUrls override a host (the host header stays the listing's)", async () 
 test("VERSION matches package.json", () => {
   const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url)));
   assert.equal(VERSION, pkg.version);
+});
+
+// Copied from https://flightpowers.com/llms-full.txt, /v1/hotels/search "filters" (2026-11-08),
+// which matches hotel_agent nodejs_mvp/main.js FILTER_MAP.
+const DOCS_BOOKING_FILTERS =
+  "free_cancellation | breakfast_included | breakfast_and_lunch | breakfast_and_dinner | all_meals_included | " +
+  "all_inclusive | free_wifi | swimming_pool | gym | parking | front_desk_24h | review_score_7 | review_score_8 | " +
+  "review_score_9 | private_bathroom | air_conditioning | stars_3 | stars_4 | stars_5 | pets_allowed | adults_only | " +
+  "sauna | very_good_breakfast | accepts_online_payment";
+
+test("BOOKING_FILTERS are exactly the 24 documented filter names", () => {
+  const docs = DOCS_BOOKING_FILTERS.split(" | ");
+  assert.equal(docs.length, 24);
+  assert.deepEqual([...BOOKING_FILTERS], docs);
+});
+
+test("the BookingFilter type is built from BOOKING_FILTERS (no second list to drift)", () => {
+  const src = readFileSync(new URL("../src/types.ts", import.meta.url), "utf8");
+  assert.match(src, /export type BookingFilter = \(typeof BOOKING_FILTERS\)\[number\];/);
+  assert.doesNotMatch(src, /"accepts_online_pay"/);
+});
+
+test("maxRetries is capped at 10 (Infinity does not retry forever)", async () => {
+  const fetch = mockFetch(retry503);
+  await assert.rejects(client(fetch, { maxRetries: Infinity }).flights.oneway(ENDPOINTS[0][2]), (err) => err.retry === true);
+  assert.equal(fetch.calls.length, 11);
+  const perCall = mockFetch(retry503);
+  await assert.rejects(client(perCall).flights.oneway(ENDPOINTS[0][2], { maxRetries: 1e9 }));
+  assert.equal(perCall.calls.length, 11);
+  const bad = mockFetch(retry503);
+  await assert.rejects(client(bad, { maxRetries: NaN }).flights.oneway(ENDPOINTS[0][2]));
+  assert.equal(bad.calls.length, 1);
+});
+
+test("a per-call timeoutMs that is not a number falls back to the default, not an instant abort", async () => {
+  const slow = async (url, init) => {
+    await new Promise((resolve, reject) => {
+      const t = setTimeout(resolve, 30);
+      init.signal.addEventListener("abort", () => { clearTimeout(t); reject(init.signal.reason); });
+    });
+    return new Response("[]", { status: 200, headers: { "content-type": "application/json" } });
+  };
+  const res = await new FlightPowers({ rapidApiKey: "k", fetch: slow }).flights.oneway(ENDPOINTS[0][2], { timeoutMs: NaN });
+  assert.deepEqual(res.data, []);
+});
+
+const hasMockTimers = Boolean(mock.timers);
+test("the computed retry wait is capped at 60 s", { skip: !hasMockTimers && "node:test mock.timers unavailable" }, async () => {
+  try {
+    mock.timers.enable({ apis: ["setTimeout"] });
+  } catch {
+    mock.timers.enable(["setTimeout"]); // Node 18/20.4 form
+  }
+  try {
+    const fetch = mockFetch(retry503, { body: [] });
+    const fp = new FlightPowers({ rapidApiKey: "k", fetch, maxRetries: 1, retryDelayMs: 10_000_000 });
+    const pending = fp.flights.oneway(ENDPOINTS[0][2]);
+    const settle = () => new Promise((r) => setImmediate(r));
+    for (let i = 0; i < 5; i++) await settle();
+    assert.equal(fetch.calls.length, 1);
+    mock.timers.tick(59_999);
+    for (let i = 0; i < 5; i++) await settle();
+    assert.equal(fetch.calls.length, 1);
+    mock.timers.tick(1);
+    for (let i = 0; i < 5; i++) await settle();
+    assert.equal(fetch.calls.length, 2);
+    assert.deepEqual((await pending).data, []);
+  } finally {
+    mock.timers.reset();
+  }
 });
