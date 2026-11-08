@@ -1,6 +1,6 @@
 {
   "name": "flightpowers",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Official FlightPowers client: live Google Flights, Booking.com, Airbnb and Google Hotels data through your RapidAPI key.",
   "keywords": ["flights", "google-flights", "hotels", "booking", "airbnb", "google-hotels", "travel", "rapidapi", "api", "sdk"],
   "homepage": "https://flightpowers.com/docs/sdks",

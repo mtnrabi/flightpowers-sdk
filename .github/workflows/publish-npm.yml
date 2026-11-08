@@ -46,4 +46,28 @@ jobs:
           fi
       - run: npm ci
       - run: npm test
-      - run: npm publish --provenance --access public
+      - run: npm publish --provenance --access public --loglevel silly
+      # Diagnostics for the trusted-publishing (OIDC) exchange. Runs only when
+      # a step failed. Prints only the debug-log lines about OIDC / the id-token
+      # request / the token exchange, with anything token-shaped masked again
+      # (npm already redacts tokens; this is a second guard).
+      - name: OIDC diagnostics (on failure only)
+        if: failure()
+        run: |
+          set -o pipefail
+          shopt -s nullglob
+          logs=("$HOME"/.npm/_logs/*-debug-0.log)
+          if [ ${#logs[@]} -eq 0 ]; then
+            echo "no npm debug log found"
+            exit 0
+          fi
+          for f in "${logs[@]}"; do
+            echo "== $(basename "$f")"
+            grep -i -E 'oidc|id-token|id_token|idtoken|trusted|exchange|audience' "$f" \
+              | sed -E \
+                  -e 's/eyJ[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+)*/[MASKED]/g' \
+                  -e 's/npm_[A-Za-z0-9]+/[MASKED]/g' \
+                  -e 's/(Bearer|Basic)[[:space:]]+[^[:space:]"]+/\1 [MASKED]/gI' \
+                  -e 's/[A-Za-z0-9+_=-]{32,}/[MASKED]/g' \
+              || echo "(no matching lines)"
+          done

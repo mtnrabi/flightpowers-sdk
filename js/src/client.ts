@@ -26,7 +26,7 @@ import type {
   RoundtripParams,
 } from "./types.js";
 
-export const VERSION = "0.1.1";
+export const VERSION = "0.1.2";
 
 /** Value of `_fp_source` on every request this package sends. */
 export const SOURCE_TAG = "sdk-js";
