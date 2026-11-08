@@ -21,7 +21,7 @@ __all__ = [
     "ResponseMeta",
 ]
 
-VERSION = "0.1.0"
+VERSION = "0.1.1"
 
 #: Value of ``_fp_source`` on every request this package sends.
 SOURCE_TAG = "sdk-py"

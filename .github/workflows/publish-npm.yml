@@ -1,10 +1,9 @@
 # Publishes js/ to npm as `flightpowers` when a GitHub release is published.
 #
-# Auth: npm trusted publishing (OIDC, no token) once the trusted publisher is
-# set on npmjs.com for this repo + this workflow file. The very first publish
-# cannot use it (npm requires the package to exist first), so for that one run
-# a short-lived token is read from the repo secret NPM_TOKEN; delete the secret
-# after the trusted publisher is saved. With the secret gone, npm uses OIDC.
+# Auth: npm trusted publishing (OIDC, no token). The trusted publisher on
+# npmjs.com names this repo and this workflow file (publish-npm.yml), set
+# 2026-11-08 after 0.1.0 was published by hand. No npm token is stored or
+# passed: an empty NODE_AUTH_TOKEN is left out so only OIDC is in play.
 #
 # Release only: no workflow_dispatch (a hand run from a branch would publish
 # unreviewed code under a permanent version). The `npm` environment only
@@ -45,19 +44,6 @@ jobs:
             echo "::error::release tag $GITHUB_REF_NAME does not match js/package.json version $version"
             exit 1
           fi
-      # The first publish needs NPM_TOKEN (the package does not exist yet, so
-      # trusted publishing cannot be set up). Fail here with a plain message
-      # instead of inside npm publish.
-      - name: npm auth preflight
-        env:
-          HAS_TOKEN: ${{ secrets.NPM_TOKEN != '' }}
-        run: |
-          if [ "$HAS_TOKEN" != "true" ] && ! npm view flightpowers name >/dev/null 2>&1; then
-            echo "::error::flightpowers is not on npm yet and NPM_TOKEN is not set: add the secret (or publish the first version by hand) before the first release"
-            exit 1
-          fi
       - run: npm ci
       - run: npm test
       - run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
